@@ -1,15 +1,15 @@
 # ai-install-k8s
-Guide to set up a Kubernetes environment (V1.17.2) with one master and one worker node.  Running on Virtualbox VMs.
+This repo contains guide to set up a Kubernetes environment (V1.17.2) with one master and one worker node.  Running on Virtualbox VMs.
 
 
 ## 1. Preparation
 
 ### 1.1 Install CentOS 7 VM
 
-Virtualbox VM (Master):
+Create Virtualbox VM (Master):
 - 4G ram
 - 4 CPU
-- Network: Nat + Host 
+- Network: NAT + Host Only
 - CentOS 7 (Minimal install)
 
 
@@ -30,15 +30,14 @@ set ONBOOT=yes
 
 For example:
 
-<img src="images/network-onboot.PNG" width='50%'>
+<img src="images/network-onboot.PNG">
 
 Run `systemctl restart network` to restart network
 
 
+Then Run `ifconfig` or `ip addr` to check the ip address
 
-Run `ifconfig` or `ip addr` to check the ip address
-
-<img src="images/network-master.PNG" width='50%'>
+<img src="images/master-ip.PNG">
 
 > Note: For minimal CentOS, please run `yum install -y net-tools` in order to use ifconfig
 
@@ -46,7 +45,7 @@ Run `ifconfig` or `ip addr` to check the ip address
 ### 1.3 Update system
 
 Connect to SSH, Run
-```
+```bash
 yum install -y wget
 
 wget -O /etc/yum.repos.d/CentOS-Base.repo http://mirrors.aliyun.com/repo/Centos-7.repo
@@ -57,13 +56,10 @@ yum makecache
 yum update
 ```
 
-
-
 ### 1.4 Disable SELinux
 
-Set SELinux in permissive mode (effectively disabling it)
-Run
-```
+Set SELinux in permissive mode (effectively disabling it), Run
+```bash
 setenforce 0
 sed -i 's/^SELINUX=enforcing$/SELINUX=permissive/' /etc/selinux/config
 ```
@@ -71,11 +67,12 @@ sed -i 's/^SELINUX=enforcing$/SELINUX=permissive/' /etc/selinux/config
 ### 1.5 Disable Swap
 
 You MUST disable swap in order for the kubelet to work properly.
-```
+```bash
+# comment out swap
 vi /etc/fstab
 ```
 
-<img src="images/swap1.PNG" width='50%'>
+<img src="images/swap1.PNG">
 
 ```
 swapoff -a
@@ -90,7 +87,7 @@ systemctl stop firewalld && systemctl disable firewalld
 ### 1.7 sysctl iptables
 
 You should ensure net.bridge.bridge-nf-call-iptables is set to 1 in your sysctl config, e.g.
-```
+```bash
 cat <<EOF > /etc/sysctl.d/k8s.conf
 net.bridge.bridge-nf-call-ip6tables = 1
 net.bridge.bridge-nf-call-iptables = 1
@@ -98,27 +95,28 @@ EOF
 
 sysctl --system
 ```
-<img src="images/iptables.PNG" width='50%'>
+<img src="images/iptables.PNG">
 
 
 ### 1.8 br_netfilter
 Make sure that the br_netfilter module is loaded. 
 
-```
+```bash
 modprobe br_netfilter
 lsmod | grep br_netfilter
 ```
-<img src="images/netfilter.PNG" width='50%'>
+<img src="images/netfilter.PNG">
 
 
 ## 2. Install Container Runtime
 
 Please follow the offical docker installation guide, the current version installed is 19.03
-```
+```bash
 yum install -y yum-utils \
   device-mapper-persistent-data \
   lvm2
 
+# use aliyun repo
 yum-config-manager --add-repo http://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
 
 yum install docker-ce docker-ce-cli containerd.io
@@ -149,12 +147,14 @@ mkdir -p /etc/systemd/system/docker.service.d
 # Restart Docker
 systemctl daemon-reload
 systemctl restart docker
+
+systemctl enable docker
 ```
 
 
 ## 3. Installing kubeadm, kubelet and kubectl
 
-Add the repo.
+Add the repo (aliyun)
 ```
 cat <<EOF > /etc/yum.repos.d/kubernetes.repo
 [kubernetes]
@@ -168,7 +168,7 @@ gpgkey=http://mirrors.aliyun.com/kubernetes/yum/doc/yum-key.gpg
 EOF
 ```
 
-Start install
+Start install kubeadm, kubelet and kubectl
 ```
 yum install -y kubelet kubeadm kubectl --disableexcludes=kubernetes
 
@@ -177,7 +177,7 @@ systemctl enable --now kubelet
 
 The current version installed is V1.17.2
 
-<img src="images/kube-version.PNG" width='50%'>
+<img src="images/kube-version.PNG">
 
 
 
@@ -188,21 +188,18 @@ Full Copy Master to create node VM, make sure the mac address is re-generated.
 ### 4.1 Change Host Name
 
 master VM:
-```
+```bash
 hostnamectl set-hostname aiden-kube-master
 ```
 
 node VM:
-```
+```bash
 hostnamectl set-hostname aiden-kube-node
 ```
 
 ### 4.2 Change Hosts
 
-Run `ifconfig` or `ip addr` to check the ip address for node VM
-
-<img src="images/network-node.PNG" width='50%'>
-
+Run `ifconfig` or `ip addr` to check the ip address for node VM, here the node IP is 192.168.56.105.
 
 Update /etc/hosts, run
 ```bash
@@ -213,42 +210,56 @@ EOF
 ```
 
 
-## 5. Start Master
+## 5. Initialize Master Node
 ```bash
-systemctl start docker
-
-kubeadm init     --apiserver-advertise-address=192.168.56.106     --image-repository registry.aliyuncs.com/google_containers     --kubernetes-version v1.17.2     --pod-network-cidr=192.168.0.0/16
+# If docker is not started, run `systemctl start docker` first
+kubeadm init \
+    --apiserver-advertise-address=192.168.56.106 \
+    --image-repository registry.aliyuncs.com/google_containers \
+    --kubernetes-version v1.17.2 \
+    --pod-network-cidr=192.168.0.0/16
 ```
 
-The output
+Then follow the guide in the output message, run
+```bash
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+```
 
-<img src="images/kube-init.PNG" width='50%'>
-
+<img src="images/kube-init.PNG">
 
 Run `kubectl get pods --all-namespaces`
 
-<img src="images/pod1.PNG" width='50%'>
+<img src="images/pod1.PNG">
 
 > Note, the coredns pod will be in pending status
 
-## 6. Install CoreDNS
+## 6. Install CoreDNS add-on
 
-On Master VM, we are going to use `Calico` as the CoreDNS provider. By default, Calico uses 192.168.0.0/16 as the Pod network CIDR, For Calico to work correctly, you need to pass this same CIDR to the kubeadm init command using the --pod-network-cidr=192.168.0.0/16 flag or via the kubeadm configuration.
+On Master VM, we are going to use `Calico` as the CoreDNS provider. 
 
+> By default, Calico uses 192.168.0.0/16 as the Pod network CIDR, For Calico to work correctly, you need to pass this same CIDR to the kubeadm init command using the --pod-network-cidr=192.168.0.0/16 flag or via the kubeadm configuration.
+
+To install Calico, run:
 ```bash
 kubectl apply -f https://docs.projectcalico.org/v3.11/manifests/calico.yaml
 ```
 
-<img src="images/calico.PNG" width='50%'>
+<img src="images/calico.PNG">
 
-Run `kubectl get pods --all-namespaces`
+Check all the pods again:
 
-<img src="images/pod2.PNG" width='50%'>
+```bash
+kubectl get pods --all-namespaces
+```
+
+<img src="images/pod2.PNG">
 
 And once the CoreDNS Pod is up and running, you can continue by joining your nodes.
 
 
-## 7. Joining to k8s master
+## 7. Joining the node
 
 On node VM, Run
 ```bash
@@ -258,7 +269,7 @@ mkdir -p $HOME/.kube
 sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
 sudo chown $(id -u):$(id -g) $HOME/.kube/config
 ```
-<img src="images/node-config.PNG" width='50%'>
+<img src="images/node-config.PNG">
 
 To join to the master, run:
 ```bash
@@ -266,10 +277,10 @@ kubeadm join 192.168.56.106:6443 --token j2qfct.tnam91v7i2wqdgc9 \
     --discovery-token-ca-cert-hash sha256:29db0966131178a76906f7db8d17210693dc0c093b060869085caa99b8434a67
 ```
 
-> This is the output of `kubeadm init` on master VM.
+> This is the output of `kubeadm init` on master VM. 
 
 
-<img src="images/join.PNG" width='50%'>
+<img src="images/join.PNG">
 
 Then check the nodes and pods.
 ```
@@ -278,6 +289,6 @@ kubectl get nodes -o wide
 kubectl get pods --all-namespaces
 ```
 
-<img src="images/kube-final.PNG" width='50%'>
+<img src="images/kube-final.PNG">
 
-Now we can see two nodes, one master and one worker node.
+Now we can see two nodes, one master and one worker node.  The installation is completed.
