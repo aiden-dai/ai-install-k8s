@@ -1,0 +1,142 @@
+
+
+1. container
+
+To run containers in Pods, Kubernetes uses a container runtime. Here are the installation instructions for various runtimes.
+
+Docker
+CRI-O
+Containerd
+Other CRI runtimes: frakti
+
+
+
+Use Docker
+
+On each of your machines, install Docker. Version 19.03.4 is recommended
+
+Installing kubeadm
+
+check
+
+One or more machines running one of:
+Ubuntu 16.04+
+Debian 9+
+CentOS 7
+Red Hat Enterprise Linux (RHEL) 7
+Fedora 25+
+HypriotOS v1.0.1+
+Container Linux (tested with 1800.6.0)
+
+
+Swap disabled. You MUST disable swap in order for the kubelet to work properly.
+
+
+Verify the MAC address and product_uuid are unique for every node
+
+mac:
+ip link or ifconfig -a
+
+product_uuid
+sudo cat /sys/class/dmi/id/product_uuid
+
+
+Installing runtime
+
+Since v1.6.0, Kubernetes has enabled the use of CRI, Container Runtime Interface, by default.
+
+use Docker
+
+Installing kubeadm, kubelet and kubectl
+
+You will install these packages on all of your machines:
+
+kubeadm: the command to bootstrap the cluster.
+
+kubelet: the component that runs on all of the machines in your cluster and does things like starting pods and containers.
+
+kubectl: the command line util to talk to your cluster.
+
+
+How:
+cat <<EOF > /etc/yum.repos.d/kubernetes.repo
+[kubernetes]
+name=Kubernetes
+baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+EOF
+
+# Set SELinux in permissive mode (effectively disabling it)
+setenforce 0
+sed -i 's/^SELINUX=enforcing$/SELINUX=permissive/' /etc/selinux/config
+
+yum install -y kubelet kubeadm kubectl --disableexcludes=kubernetes
+
+systemctl enable --now kubelet
+
+
+
+
+You should ensure net.bridge.bridge-nf-call-iptables is set to 1 in your sysctl config, e.g.
+cat <<EOF > /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+EOF
+sysctl --system
+
+
+
+Configure cgroup driver used by kubelet on control-plane node
+
+When using Docker, kubeadm will automatically detect the cgroup driver for the kubelet and set it in the /var/lib/kubelet/kubeadm-flags.env file during runtime.
+
+
+
+
+Restarting the kubelet is required:
+
+systemctl daemon-reload
+systemctl restart kubelet
+
+
+
+Initializing your control-plane node
+kubeadm init
+??
+
+Installing a Pod network add-on
+
+You must install a Pod network add-on so that your Pods can communicate with each other.
+
+weave net?
+kubectl apply -f "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d '\n')"
+
+Once a Pod network has been installed, you can confirm that it is working by checking that the CoreDNS Pod is Running in the output of kubectl get pods --all-namespaces. And once the CoreDNS Pod is up and running, you can continue by joining your nodes.
+
+
+
+Joining your nodes
+
+Run the command that was output by kubeadm init.
+
+
+
+If you do not have the token, you can get it by running the following command on the control-plane node:
+
+kubeadm token list
+
+
+
+Controlling your cluster from machines other than the control-plane node
+
+In order to get a kubectl on some other computer (e.g. laptop) to talk to your cluster, you need to copy the administrator kubeconfig file from your control-plane node to your workstation like this:
+
+scp root@<control-plane-host>:/etc/kubernetes/admin.conf .
+kubectl --kubeconfig ./admin.conf get nodes
+
+
+
+https://www.bilibili.com/video/av76793551?t=111
