@@ -175,7 +175,7 @@ yum install -y kubelet kubeadm kubectl --disableexcludes=kubernetes
 systemctl enable --now kubelet
 ```
 
-The current version installed is V1.17.2
+The current version installed is V1.17.3
 
 <img src="images/kube-version.PNG">
 
@@ -216,7 +216,7 @@ EOF
 kubeadm init \
     --apiserver-advertise-address=192.168.56.106 \
     --image-repository registry.aliyuncs.com/google_containers \
-    --kubernetes-version v1.17.2 \
+    --kubernetes-version v1.17.3 \
     --pod-network-cidr=192.168.0.0/16
 ```
 
@@ -234,6 +234,14 @@ Run `kubectl get pods --all-namespaces`
 <img src="images/pod1.PNG">
 
 > Note, the coredns pod will be in pending status
+
+Enable schedules on master node (Optional), run:
+```bash
+kubectl taint nodes --all node-role.kubernetes.io/master-
+```
+
+> By default, your cluster will not schedule Pods on the control-plane node for security reasons.
+
 
 ## 6. Install CoreDNS add-on
 
