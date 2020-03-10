@@ -1,5 +1,5 @@
 # ai-install-k8s
-This repo contains guide to set up a Kubernetes environment (V1.17.2) with one master and one worker node.  Running on Virtualbox VMs.
+This repo contains guide to set up a Kubernetes environment (V1.17.3) with one master and one worker node.  Running on Virtualbox VMs.
 
 
 ## 1. Preparation
@@ -299,4 +299,4 @@ kubectl get pods --all-namespaces
 
 <img src="images/kube-final.PNG">
 
-Now we can see two nodes, one master and one worker node.  The installation is completed.
+Now we can see two nodes, one master and one worker node (The picture is not updated).  The installation is completed.
